@@ -1,55 +1,60 @@
+from loguru import logger
 import psutil
 import time
-import psutil
-import time
+import argparse
+def convert_bytes_to_unit(bytes_value, unit='MB'):
+    units = {'B': 1, 'KB': 1024, 'MB': 1024 ** 2, 'GB': 1024 ** 3}
+    return bytes_value / units[unit]
 
+def get_network_speed(interface='eth0', interval=1, unit='MB', duration=60):
+    log_file = "network_speed.log"
+    logger.add(log_file, rotation="1 day")
 
-def bytes_to_mb(bytes_value):
-    mb_value = bytes_value / (1024.0 ** 2)
-    return mb_value
+    start_time = time.time()
+    end_time = start_time + duration
 
+    while time.time() < end_time:
+        # 获取初始时间点的字节数
+        initial_stats = psutil.net_io_counters(pernic=True)[interface]
+        start_time_interval = time.time()
 
-def get_network_usage(interface='eth0'):
-    while True:
-        try:
-            net_stats = psutil.net_io_counters(pernic=True)[interface]
-            print(f"Interface: {interface}")
-            print(f"   sent: {bytes_to_mb(net_stats.bytes_sent):05f} MB")
-            print(f"   received: {bytes_to_mb(net_stats.bytes_recv):05f} MB")
-            print("=" * 30)
-            time.sleep(1)
-        except KeyError:
-            print(f"Error: Interface '{interface}' not found.")
-            break
+        # 等待一段时间
+        time.sleep(interval)
+
+        # 获取结束时间点的字节数
+        final_stats = psutil.net_io_counters(pernic=True)[interface]
+        end_time_interval = time.time()
+
+        # 计算字节数的差异和时间的差异
+        bytes_sent_diff = final_stats.bytes_sent - initial_stats.bytes_sent
+        bytes_recv_diff = final_stats.bytes_recv - initial_stats.bytes_recv
+        time_diff = end_time_interval - start_time_interval
+
+        # 计算瞬时速度
+        send_speed = convert_bytes_to_unit(bytes_sent_diff / time_diff, unit)
+        recv_speed = convert_bytes_to_unit(bytes_recv_diff / time_diff, unit)
+
+        logger.info(f"Send Speed: {send_speed:.2f} {unit}/second, Receive Speed: {recv_speed:.2f} {unit}/second")
 
 def get_network_interfaces():
     interfaces = psutil.net_if_stats().keys()
     return interfaces
 
-def get_process_network_usage(pid, interval=1):
-    try:
-        process = psutil.Process(pid)
-    except psutil.NoSuchProcess:
-        print(f"Error: Process with PID {pid} not found.")
-        return
-
-    while True:
-        try:
-            io_counters = process.io_counters()
-            print(f"Process: {process.name()} (PID: {pid})")
-            print(f"   sent: {bytes_to_mb(io_counters.bytes_sent):05f} MB")
-            print(f"   received: {bytes_to_mb(io_counters.bytes_recv):05f} MB")
-            print("=" * 30)
-            time.sleep(interval)
-        except (psutil.AccessDenied, psutil.ZombieProcess):
-            print(f"Error: Unable to access process with PID {pid}.")
-            break
-
-if __name__ == "__main__":
-    # 用法示例
+def get_interface_to_monitor():
     interfaces_list = get_network_interfaces()
     print("Available network interfaces:", interfaces_list)
-    interface_to_monitor = input("choosse interface:")
-    get_network_usage(interface_to_monitor)
-    pid = int(input("enter pid"))
-    get_process_network_usage(pid)
+
+    parser = argparse.ArgumentParser(description="Monitor network speed on a specific interface.")
+    parser.add_argument("--interface", type=str, help="Specify the network interface to monitor.")
+
+    args = parser.parse_args()
+
+    if args.interface is None:
+        interface_to_monitor = input("Choose interface: ")
+    else:
+        interface_to_monitor = args.interface
+    return interface_to_monitor
+
+if __name__ == "__main__":
+    interface_to_monitor = get_interface_to_monitor()
+    get_network_speed(interface_to_monitor)

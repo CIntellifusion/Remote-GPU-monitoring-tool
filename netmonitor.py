@@ -3,10 +3,11 @@ import psutil
 import time
 import argparse
 def convert_bytes_to_unit(bytes_value, unit='MB'):
+    bytes_value*=8
     units = {'B': 1, 'KB': 1024, 'MB': 1024 ** 2, 'GB': 1024 ** 3}
     return bytes_value / units[unit]
 
-def get_network_speed(interface='eth0', interval=1, unit='MB', duration=60):
+def get_network_speed(interface='eth0', interval=1, unit='MB', duration=600):
     log_file = "network_speed.log"
     logger.add(log_file, rotation="1 day")
 
